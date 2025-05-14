@@ -7,14 +7,37 @@ import cv2
 import numpy as np
 from torchvision.transforms import v2
 
+from app.helpers.devices import get_onnx_device_type_and_id
+
 if TYPE_CHECKING:
-    from app.processors.models_processor import ModelsProcessor
+    from app.processors.models_processor_v2 import ModelsProcessorV2
 from app.processors.models_data import models_dir
 from app.processors.utils import faceutil
 
 class FaceLandmarkDetectors:
-    def __init__(self, models_processor: 'ModelsProcessor'):
+    def __init__(self, models_processor: 'ModelsProcessorV2'):
         self.models_processor = models_processor
+        
+    def _get_device_info(self):
+        """
+        Получает информацию об устройстве для ONNX Runtime IO Binding.
+        
+        Returns:
+            tuple: (device_type, device_id)
+        """
+        return get_onnx_device_type_and_id(
+            self.models_processor.torch_device_string, 
+            self.models_processor.cuda_device_id
+        )
+            
+    def _sync_device(self):
+        """
+        Синхронизирует устройство после выполнения операций.
+        """
+        if self.models_processor.device == "cuda" or self.models_processor.device.startswith("cuda:"):
+            torch.cuda.synchronize()
+        elif self.models_processor.device != "cpu":
+            self.models_processor.syncvec.cpu()
 
     def run_detect_landmark(self, img, bbox, det_kpss, detect_mode='203', score=0.5, from_points=False):
         kpss_5 = []

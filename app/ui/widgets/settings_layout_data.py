@@ -1,6 +1,8 @@
 from app.ui.widgets.actions import control_actions
 import cv2
 from app.helpers.typing_helper import LayoutDictTypes
+from app.helpers.devices import get_available_devices
+import torch.cuda as cu
 SETTINGS_LAYOUT_DATA: LayoutDictTypes = {
     'Appearance': {
         'ThemeSelection': {
@@ -14,15 +16,6 @@ SETTINGS_LAYOUT_DATA: LayoutDictTypes = {
         },
     },
     'General': {
-        'ProvidersPrioritySelection': {
-            'level': 1,
-            'label': 'Providers Priority',
-            'options': ['CUDA', 'TensorRT', 'TensorRT-Engine', 'CPU'],
-            'default': 'CUDA',
-            'help': 'Select the providers priority to be used with the system.',
-            'exec_function': control_actions.change_execution_provider,
-            'exec_function_args': [],
-        },
         'nThreadsSlider': {
             'level': 1,
             'label': 'Number of Threads',
@@ -71,6 +64,13 @@ SETTINGS_LAYOUT_DATA: LayoutDictTypes = {
             'options': ['RetinaFace', 'Yolov8', 'SCRFD', 'Yunet'],
             'default': 'RetinaFace',
             'help': 'Select the face detection model to use for detecting faces in the input image or video.'
+        },
+        'DetectorDeviceSelection': {
+            'level': 1,
+            'label': 'Detector Device',
+            'options': get_available_devices,
+            'default': 'cuda:0' if cu.is_available() else 'cpu',
+            'help': 'Select the device for face detection. CUDA is recommended for better performance.'
         },
         'DetectorScoreSlider': {
             'level': 1,
@@ -259,6 +259,13 @@ SETTINGS_LAYOUT_DATA: LayoutDictTypes = {
             'default': 'Inswapper128ArcFace',
             'help': 'Choose the ArcFace model to be used for comparing the similarity of faces.'
         },
+        'RecognitionDeviceSelection': {
+            'level': 1,
+            'label': 'Recognition Device',
+            'options': get_available_devices,
+            'default': 'cuda:0' if cu.is_available() else 'cpu',
+            'help': 'Select the device for face recognition. CUDA is recommended for better performance.'
+        },
         'SimilarityTypeSelection': {
             'level': 1,
             'label': 'Swapping Similarity Type',
@@ -288,6 +295,22 @@ SETTINGS_LAYOUT_DATA: LayoutDictTypes = {
             'label': 'Input Faces Include Subfolders',
             'default': False,
             'help': 'Include all files from Subfolders when choosing Input Faces Folder'
+        }
+    },
+    'Face Masks': {
+        'FaceMaskModelSelection': {
+            'level': 1,
+            'label': 'Face Mask Model',
+            'options': ['Occluder', 'XSeg', 'FaceParser'],
+            'default': 'Occluder',
+            'help': 'Select the face mask model to use for masking faces in the input image or video.'
+        },
+        'FaceMaskDeviceSelection': {
+            'level': 1,
+            'label': 'Face Mask Device',
+            'options': get_available_devices,
+            'default': 'cuda:0' if cu.is_available() else 'cpu',
+            'help': 'Select the device for face masking. CUDA is recommended for better performance.'
         }
     }
 }

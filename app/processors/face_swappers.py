@@ -6,13 +6,37 @@ import numpy as np
 from numpy.linalg import norm as l2norm
 import onnx
 from typing import TYPE_CHECKING
+from app.helpers.devices import get_onnx_device_type_and_id
+
 if TYPE_CHECKING:
-    from app.processors.models_processor import ModelsProcessor
+    from app.processors.models_processor_v2 import ModelsProcessorV2
 from app.helpers.downloader import download_file
 from app.helpers.miscellaneous import is_file_exists
+
 class FaceSwappers:
-    def __init__(self, models_processor: 'ModelsProcessor'):
+    def __init__(self, models_processor: 'ModelsProcessorV2'):
         self.models_processor = models_processor
+        
+    def _get_device_info(self):
+        """
+        Получает информацию об устройстве для ONNX Runtime IO Binding.
+        
+        Returns:
+            tuple: (device_type, device_id)
+        """
+        return get_onnx_device_type_and_id(
+            self.models_processor.torch_device_string, 
+            self.models_processor.cuda_device_id
+        )
+            
+    def _sync_device(self):
+        """
+        Синхронизирует устройство после выполнения операций.
+        """
+        if self.models_processor.device == "cuda" or self.models_processor.device.startswith("cuda:"):
+            torch.cuda.synchronize()
+        elif self.models_processor.device != "cpu":
+            self.models_processor.syncvec.cpu()
 
     def run_recognize_direct(self, img, kps, similarity_type='Opal', arcface_model='Inswapper128ArcFace'):
         if not self.models_processor.models[arcface_model]:
@@ -82,17 +106,17 @@ class FaceSwappers:
         for o in outputs:
             output_names.append(o.name)
 
+        # Получаем правильный device_type и device_id для ONNX Runtime
+        device_type, device_id = self._get_device_info()
+
         io_binding = self.models_processor.models[arcface_model].io_binding()
-        io_binding.bind_input(name=input_name, device_type=self.models_processor.device, device_id=0, element_type=np.float32,  shape=img.size(), buffer_ptr=img.data_ptr())
+        io_binding.bind_input(name=input_name, device_type=device_type, device_id=device_id, element_type=np.float32, shape=img.size(), buffer_ptr=img.data_ptr())
 
         for i in range(len(output_names)):
-            io_binding.bind_output(output_names[i], self.models_processor.device)
+            io_binding.bind_output(output_names[i], device_type, device_id)
 
         # Sync and run model
-        if self.models_processor.device == "cuda":
-            torch.cuda.synchronize()
-        elif self.models_processor.device != "cpu":
-            self.models_processor.syncvec.cpu()
+        self._sync_device()
         self.models_processor.models[arcface_model].run_with_iobinding(io_binding)
 
         # Return embedding
@@ -120,14 +144,14 @@ class FaceSwappers:
         # Usa la funzione di preprocessamento
         img, cropped_image = self.preprocess_image_cscs(img, face_kps)
 
-        io_binding = self.models_processor.models['CSCSArcFace'].io_binding()
-        io_binding.bind_input(name='input', device_type=self.models_processor.device, device_id=0, element_type=np.float32, shape=img.size(), buffer_ptr=img.data_ptr())
-        io_binding.bind_output(name='output', device_type=self.models_processor.device)
+        # Получаем правильный device_type и device_id для ONNX Runtime
+        device_type, device_id = self._get_device_info()
 
-        if self.models_processor.device == "cuda":
-            torch.cuda.synchronize()
-        elif self.models_processor.device != "cpu":
-            self.models_processor.syncvec.cpu()
+        io_binding = self.models_processor.models['CSCSArcFace'].io_binding()
+        io_binding.bind_input(name='input', device_type=device_type, device_id=device_id, element_type=np.float32, shape=img.size(), buffer_ptr=img.data_ptr())
+        io_binding.bind_output(name='output', device_type=device_type, device_id=device_id)
+
+        self._sync_device()
 
         self.models_processor.models['CSCSArcFace'].run_with_iobinding(io_binding)
 
@@ -149,14 +173,14 @@ class FaceSwappers:
         if face_kps is not None:
             img, _ = self.preprocess_image_cscs(img, face_kps)
 
-        io_binding = self.models_processor.models['CSCSIDArcFace'].io_binding()
-        io_binding.bind_input(name='input', device_type=self.models_processor.device, device_id=0, element_type=np.float32, shape=img.size(), buffer_ptr=img.data_ptr())
-        io_binding.bind_output(name='output', device_type=self.models_processor.device)
+        # Получаем правильный device_type и device_id для ONNX Runtime
+        device_type, device_id = self._get_device_info()
 
-        if self.models_processor.device == "cuda":
-            torch.cuda.synchronize()
-        elif self.models_processor.device != "cpu":
-            self.models_processor.syncvec.cpu()
+        io_binding = self.models_processor.models['CSCSIDArcFace'].io_binding()
+        io_binding.bind_input(name='input', device_type=device_type, device_id=device_id, element_type=np.float32, shape=img.size(), buffer_ptr=img.data_ptr())
+        io_binding.bind_output(name='output', device_type=device_type, device_id=device_id)
+
+        self._sync_device()
             
         self.models_processor.models['CSCSIDArcFace'].run_with_iobinding(io_binding)
 
@@ -174,15 +198,15 @@ class FaceSwappers:
         if not self.models_processor.models['CSCS']:
             self.models_processor.models['CSCS'] = self.models_processor.load_model('CSCS')
 
-        io_binding = self.models_processor.models['CSCS'].io_binding()
-        io_binding.bind_input(name='input_1', device_type=self.models_processor.device, device_id=0, element_type=np.float32, shape=(1,3,256,256), buffer_ptr=image.data_ptr())
-        io_binding.bind_input(name='input_2', device_type=self.models_processor.device, device_id=0, element_type=np.float32, shape=(1,512), buffer_ptr=embedding.data_ptr())
-        io_binding.bind_output(name='output', device_type=self.models_processor.device, device_id=0, element_type=np.float32, shape=(1,3,256,256), buffer_ptr=output.data_ptr())
+        # Получаем правильный device_type и device_id для ONNX Runtime
+        device_type, device_id = self._get_device_info()
 
-        if self.models_processor.device == "cuda":
-            torch.cuda.synchronize()
-        elif self.models_processor.device != "cpu":
-            self.models_processor.syncvec.cpu()
+        io_binding = self.models_processor.models['CSCS'].io_binding()
+        io_binding.bind_input(name='input_1', device_type=device_type, device_id=device_id, element_type=np.float32, shape=(1,3,256,256), buffer_ptr=image.data_ptr())
+        io_binding.bind_input(name='input_2', device_type=device_type, device_id=device_id, element_type=np.float32, shape=(1,512), buffer_ptr=embedding.data_ptr())
+        io_binding.bind_output(name='output', device_type=device_type, device_id=device_id, element_type=np.float32, shape=(1,3,256,256), buffer_ptr=output.data_ptr())
+
+        self._sync_device()
         self.models_processor.models['CSCS'].run_with_iobinding(io_binding)
 
     def calc_inswapper_latent(self, source_embedding):
@@ -196,15 +220,15 @@ class FaceSwappers:
         if not self.models_processor.models['Inswapper128']:
             self.models_processor.models['Inswapper128'] = self.models_processor.load_model('Inswapper128')
 
-        io_binding = self.models_processor.models['Inswapper128'].io_binding()
-        io_binding.bind_input(name='target', device_type=self.models_processor.device, device_id=0, element_type=np.float32, shape=(1,3,128,128), buffer_ptr=image.data_ptr())
-        io_binding.bind_input(name='source', device_type=self.models_processor.device, device_id=0, element_type=np.float32, shape=(1,512), buffer_ptr=embedding.data_ptr())
-        io_binding.bind_output(name='output', device_type=self.models_processor.device, device_id=0, element_type=np.float32, shape=(1,3,128,128), buffer_ptr=output.data_ptr())
+        # Получаем правильный device_type и device_id для ONNX Runtime
+        device_type, device_id = self._get_device_info()
 
-        if self.models_processor.device == "cuda":
-            torch.cuda.synchronize()
-        elif self.models_processor.device != "cpu":
-            self.models_processor.syncvec.cpu()
+        io_binding = self.models_processor.models['Inswapper128'].io_binding()
+        io_binding.bind_input(name='target', device_type=device_type, device_id=device_id, element_type=np.float32, shape=(1,3,128,128), buffer_ptr=image.data_ptr())
+        io_binding.bind_input(name='source', device_type=device_type, device_id=device_id, element_type=np.float32, shape=(1,512), buffer_ptr=embedding.data_ptr())
+        io_binding.bind_output(name='output', device_type=device_type, device_id=device_id, element_type=np.float32, shape=(1,3,128,128), buffer_ptr=output.data_ptr())
+
+        self._sync_device()
         self.models_processor.models['Inswapper128'].run_with_iobinding(io_binding)
 
     def calc_swapper_latent_ghost(self, source_embedding):
@@ -224,15 +248,15 @@ class FaceSwappers:
         if not self.models_processor.models[ISS_MODEL_NAME]:
             self.models_processor.models[ISS_MODEL_NAME] = self.models_processor.load_model(ISS_MODEL_NAME)
         
+        # Получаем правильный device_type и device_id для ONNX Runtime
+        device_type, device_id = self._get_device_info()
+        
         io_binding = self.models_processor.models[ISS_MODEL_NAME].io_binding()
-        io_binding.bind_input(name='target', device_type=self.models_processor.device, device_id=0, element_type=np.float32, shape=(1,3,256,256), buffer_ptr=image.data_ptr())
-        io_binding.bind_input(name='source', device_type=self.models_processor.device, device_id=0, element_type=np.float32, shape=(1,512), buffer_ptr=embedding.data_ptr())
-        io_binding.bind_output(name='output', device_type=self.models_processor.device, device_id=0, element_type=np.float32, shape=(1,3,256,256), buffer_ptr=output.data_ptr())
+        io_binding.bind_input(name='target', device_type=device_type, device_id=device_id, element_type=np.float32, shape=(1,3,256,256), buffer_ptr=image.data_ptr())
+        io_binding.bind_input(name='source', device_type=device_type, device_id=device_id, element_type=np.float32, shape=(1,512), buffer_ptr=embedding.data_ptr())
+        io_binding.bind_output(name='output', device_type=device_type, device_id=device_id, element_type=np.float32, shape=(1,3,256,256), buffer_ptr=output.data_ptr())
 
-        if self.models_processor.device == "cuda":
-            torch.cuda.synchronize()
-        elif self.models_processor.device != "cpu":
-            self.models_processor.syncvec.cpu()
+        self._sync_device()
         self.models_processor.models[ISS_MODEL_NAME].run_with_iobinding(io_binding)
 
     def calc_swapper_latent_simswap512(self, source_embedding):
@@ -245,15 +269,15 @@ class FaceSwappers:
         if not self.models_processor.models['SimSwap512']:
             self.models_processor.models['SimSwap512'] = self.models_processor.load_model('SimSwap512')
 
-        io_binding = self.models_processor.models['SimSwap512'].io_binding()
-        io_binding.bind_input(name='input', device_type=self.models_processor.device, device_id=0, element_type=np.float32, shape=(1,3,512,512), buffer_ptr=image.data_ptr())
-        io_binding.bind_input(name='onnx::Gemm_1', device_type=self.models_processor.device, device_id=0, element_type=np.float32, shape=(1,512), buffer_ptr=embedding.data_ptr())
-        io_binding.bind_output(name='output', device_type=self.models_processor.device, device_id=0, element_type=np.float32, shape=(1,3,512,512), buffer_ptr=output.data_ptr())
+        # Получаем правильный device_type и device_id для ONNX Runtime
+        device_type, device_id = self._get_device_info()
 
-        if self.models_processor.device == "cuda":
-            torch.cuda.synchronize()
-        elif self.models_processor.device != "cpu":
-            self.models_processor.syncvec.cpu()
+        io_binding = self.models_processor.models['SimSwap512'].io_binding()
+        io_binding.bind_input(name='input', device_type=device_type, device_id=device_id, element_type=np.float32, shape=(1,3,512,512), buffer_ptr=image.data_ptr())
+        io_binding.bind_input(name='onnx::Gemm_1', device_type=device_type, device_id=device_id, element_type=np.float32, shape=(1,512), buffer_ptr=embedding.data_ptr())
+        io_binding.bind_output(name='output', device_type=device_type, device_id=device_id, element_type=np.float32, shape=(1,3,512,512), buffer_ptr=output.data_ptr())
+
+        self._sync_device()
         self.models_processor.models['SimSwap512'].run_with_iobinding(io_binding)
 
     def run_swapper_ghostface(self, image, embedding, output, swapper_model='GhostFace-v2'):
@@ -279,13 +303,13 @@ class FaceSwappers:
             ghostfaceswap_model = self.models_processor.models['GhostFacev3']
             output_name = '1549'
 
-        io_binding = ghostfaceswap_model.io_binding()
-        io_binding.bind_input(name='target', device_type=self.models_processor.device, device_id=0, element_type=np.float32, shape=(1,3,256,256), buffer_ptr=image.data_ptr())
-        io_binding.bind_input(name='source', device_type=self.models_processor.device, device_id=0, element_type=np.float32, shape=(1,512), buffer_ptr=embedding.data_ptr())
-        io_binding.bind_output(name=output_name, device_type=self.models_processor.device, device_id=0, element_type=np.float32, shape=(1,3,256,256), buffer_ptr=output.data_ptr())
+        # Получаем правильный device_type и device_id для ONNX Runtime
+        device_type, device_id = self._get_device_info()
 
-        if self.models_processor.device == "cuda":
-            torch.cuda.synchronize()
-        elif self.models_processor.device != "cpu":
-            self.models_processor.syncvec.cpu()
+        io_binding = ghostfaceswap_model.io_binding()
+        io_binding.bind_input(name='target', device_type=device_type, device_id=device_id, element_type=np.float32, shape=(1,3,256,256), buffer_ptr=image.data_ptr())
+        io_binding.bind_input(name='source', device_type=device_type, device_id=device_id, element_type=np.float32, shape=(1,512), buffer_ptr=embedding.data_ptr())
+        io_binding.bind_output(name=output_name, device_type=device_type, device_id=device_id, element_type=np.float32, shape=(1,3,256,256), buffer_ptr=output.data_ptr())
+
+        self._sync_device()
         ghostfaceswap_model.run_with_iobinding(io_binding)

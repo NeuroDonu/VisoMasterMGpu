@@ -874,12 +874,12 @@ class SelectionBox(QtWidgets.QComboBox, ParametersWidget):
 
     def reset_to_default_value(self):
         # Check if selection values are dynamically retrieved
-        if callable(self.selection_values) and callable(self.default_value):
+        if callable(self.selection_values):
             self.clear()
             self.addItems(self.selection_values())
-            self.setCurrentText(self.default_value())
-        else:
-            self.setCurrentText(self.default_value)
+            
+        # Установка значения по умолчанию
+        self.setCurrentText(self.default_value)
 
     def set_value(self, value):
         if callable(value):

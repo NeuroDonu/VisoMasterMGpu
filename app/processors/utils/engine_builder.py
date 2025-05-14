@@ -149,3 +149,138 @@ def onnx_to_trt(onnx_model_path, trt_model_path=None, precision="fp16", custom_p
 
     builder.create_network(onnx_model_path)
     builder.create_engine(trt_model_path, precision)
+    
+def create_tensorrt_provider_options(trt_engine_path=None, device_id=0, fp16_enable=True):
+    """
+    Создает опции для TensorRT провайдера ONNX Runtime.
+    
+    Args:
+        trt_engine_path (str, optional): Путь к файлу TensorRT движка или директории кэша.
+        device_id (int): ID устройства CUDA.
+        fp16_enable (bool): Включить ли поддержку FP16.
+        
+    Returns:
+        dict: Словарь с опциями для TensorRT провайдера.
+    """
+    cache_path = os.path.dirname(trt_engine_path) if trt_engine_path else os.path.join(os.path.expanduser("~"), ".cache", "tensorrt")
+    
+    # Создаем директорию кэша, если она не существует
+    if not os.path.exists(cache_path):
+        os.makedirs(cache_path, exist_ok=True)
+    
+    # Создаем опции для TensorRT провайдера
+    provider_options = {
+        'device_id': device_id,
+        'trt_engine_cache_enable': True,
+        'trt_engine_cache_path': cache_path,
+        'trt_fp16_enable': fp16_enable,
+        'trt_max_workspace_size': 3 * (2 ** 30),  # 3 GB
+        'trt_engine_decryption_enable': False,
+        'trt_engine_decryption_lib_path': '',
+        'trt_dla_enable': False,
+        'trt_dla_core': 0,
+        'trt_dump_subgraphs': False,
+        'trt_timing_cache_enable': True,
+        'trt_force_sequential_engine_build': False,
+        'trt_context_memory_sharing_enable': False,
+        'trt_layer_norm_fp32_fallback': False,
+        'trt_timing_cache_path': '',
+        'trt_detailed_build_log': False,
+        'trt_build_heuristics_enable': False,
+        'trt_sparsity_enable': False,
+        'trt_builder_optimization_level': 3,
+        'trt_auxiliary_streams': 1,
+        'trt_tactic_sources': '',
+        'trt_extra_plugin_lib_paths': '',
+        'trt_profile_min_shapes': '',
+        'trt_profile_max_shapes': '',
+        'trt_profile_opt_shapes': '',
+        'trt_cuda_graph_enable': False,
+    }
+    
+    return provider_options
+
+class TensorRTProvider:
+    """
+    Класс для работы с TensorRT провайдером в ONNX Runtime.
+    """
+    
+    @staticmethod
+    def is_available():
+        """
+        Проверяет, доступен ли TensorRT.
+        
+        Returns:
+            bool: True, если TensorRT доступен, иначе False.
+        """
+        try:
+            import tensorrt
+            import onnxruntime
+            return 'TensorrtExecutionProvider' in onnxruntime.get_available_providers()
+        except (ImportError, ModuleNotFoundError):
+            return False
+    
+    @staticmethod
+    def get_provider_and_options(device_id=0, trt_engine_path=None, fp16_enable=True):
+        """
+        Возвращает провайдер TensorRT и его опции для ONNX Runtime.
+        
+        Args:
+            device_id (int): ID устройства CUDA.
+            trt_engine_path (str, optional): Путь к файлу TensorRT движка или директории кэша.
+            fp16_enable (bool): Включить ли поддержку FP16.
+            
+        Returns:
+            tuple: (provider_name, provider_options) или (None, None), если TensorRT недоступен.
+        """
+        if not TensorRTProvider.is_available():
+            log.warning("TensorRT provider is not available")
+            return None, None
+        
+        provider_name = 'TensorrtExecutionProvider'
+        provider_options = create_tensorrt_provider_options(
+            trt_engine_path=trt_engine_path,
+            device_id=device_id,
+            fp16_enable=fp16_enable
+        )
+        
+        return provider_name, provider_options
+    
+    @staticmethod
+    def create_session(onnx_model_path, device_id=0, trt_engine_path=None, fp16_enable=True):
+        """
+        Создает сессию ONNX Runtime с TensorRT провайдером.
+        
+        Args:
+            onnx_model_path (str): Путь к ONNX модели.
+            device_id (int): ID устройства CUDA.
+            trt_engine_path (str, optional): Путь к файлу TensorRT движка или директории кэша.
+            fp16_enable (bool): Включить ли поддержку FP16.
+            
+        Returns:
+            onnxruntime.InferenceSession: Сессия ONNX Runtime с TensorRT провайдером или None, если TensorRT недоступен.
+        """
+        import onnxruntime
+        
+        provider, options = TensorRTProvider.get_provider_and_options(
+            device_id=device_id,
+            trt_engine_path=trt_engine_path,
+            fp16_enable=fp16_enable
+        )
+        
+        if provider is None:
+            log.warning("Using default CUDA provider instead of TensorRT")
+            return onnxruntime.InferenceSession(
+                onnx_model_path,
+                providers=['CUDAExecutionProvider', 'CPUExecutionProvider']
+            )
+        
+        log.info(f"Creating ONNX Runtime session with TensorRT provider (device_id={device_id}, fp16={fp16_enable})")
+        return onnxruntime.InferenceSession(
+            onnx_model_path,
+            providers=[
+                (provider, options),
+                'CUDAExecutionProvider',
+                'CPUExecutionProvider'
+            ]
+        )

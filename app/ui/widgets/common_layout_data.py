@@ -1,5 +1,8 @@
 from app.helpers.typing_helper import LayoutDictTypes
 import app.ui.widgets.actions.layout_actions as layout_actions
+from app.helpers.devices import get_available_devices
+import torch.cuda as cu
+
 
 COMMON_LAYOUT_DATA: LayoutDictTypes = {
     # 'Face Compare':{
@@ -35,6 +38,15 @@ COMMON_LAYOUT_DATA: LayoutDictTypes = {
             'parentToggle': 'FaceRestorerEnableToggle',
             'requiredToggleValue': True,
             'help': 'Select the model type for face restoration.'
+        },
+        'FaceRestorerDeviceSelection': { # <--- НОВЫЙ ВИДЖЕТ
+            'level': 2,
+            'label': 'Device',
+            'options': get_available_devices, # Используем функцию
+            'default': 'cuda:0' if cu.is_available() else 'cpu', # Динамический дефолт
+            'parentToggle': 'FaceRestorerEnableToggle',
+            'requiredToggleValue': True,
+            'help': 'Select the device for this face restorer.'
         },
         'FaceRestorerDetTypeSelection': {
             'level': 2,
@@ -83,6 +95,15 @@ COMMON_LAYOUT_DATA: LayoutDictTypes = {
             'requiredToggleValue': True,
             'help': 'Select the model type for face restoration.'
         },
+        'FaceRestorerDevice2Selection': { # <--- НОВЫЙ ВИДЖЕТ для второго реставратора
+            'level': 2,
+            'label': 'Device',
+            'options': get_available_devices,
+            'default': 'cuda:0' if cu.is_available() else 'cpu',
+            'parentToggle': 'FaceRestorerEnable2Toggle',
+            'requiredToggleValue': True,
+            'help': 'Select the device for this face restorer 2.'
+        },
         'FaceRestorerDetType2Selection': {
             'level': 2,
             'label': 'Alignment',
@@ -120,6 +141,15 @@ COMMON_LAYOUT_DATA: LayoutDictTypes = {
             'label': 'Enable Face Expression Restorer',
             'default': False,
             'help': 'Enabled the use of the LivePortrait face expression model to restore facial expressions after swapping.'
+        },
+        'FaceExpressionDeviceSelection': { # <--- НОВЫЙ ВИДЖЕТ для экспрессии
+            'level': 2,
+            'label': 'Device',
+            'options': get_available_devices,
+            'default': 'cuda:0' if cu.is_available() else 'cpu',
+            'parentToggle': 'FaceExpressionEnableToggle',
+            'requiredToggleValue': True,
+            'help': 'Select the device for the face expression restorer.'
         },
         'FaceExpressionCropScaleDecimalSlider': {
             'level': 2,

@@ -4,14 +4,37 @@ import torch
 from torchvision.transforms import v2
 import numpy as np
 
+from app.helpers.devices import get_onnx_device_type_and_id
+
 if TYPE_CHECKING:
-    from app.processors.models_processor import ModelsProcessor
+    from app.processors.models_processor_v2 import ModelsProcessorV2
 
 from app.processors.utils import faceutil
 
 class FaceDetectors:
-    def __init__(self, models_processor: 'ModelsProcessor'):
+    def __init__(self, models_processor: 'ModelsProcessorV2'):
         self.models_processor = models_processor
+        
+    def _get_device_info(self):
+        """
+        Получает информацию об устройстве для ONNX Runtime IO Binding.
+        
+        Returns:
+            tuple: (device_type, device_id)
+        """
+        return get_onnx_device_type_and_id(
+            self.models_processor.torch_device_string, 
+            self.models_processor.cuda_device_id
+        )
+            
+    def _sync_device(self):
+        """
+        Синхронизирует устройство после выполнения операций.
+        """
+        if self.models_processor.device == "cuda" or self.models_processor.device.startswith("cuda:"):
+            torch.cuda.synchronize()
+        elif self.models_processor.device != "cpu":
+            self.models_processor.syncvec.cpu()
 
     def run_detect(self, img, detect_mode='RetinaFace', max_num=1, score=0.5, input_size=(512, 512), use_landmark_detection=False, landmark_detect_mode='203', landmark_score=0.5, from_points=False, rotation_angles=None):
         rotation_angles = rotation_angles or [0]
@@ -101,24 +124,24 @@ class FaceDetectors:
                 IM = None
                 aimg = torch.unsqueeze(det_img, 0).contiguous()
 
+            # Получаем правильный device_type и device_id для ONNX Runtime
+            device_type, device_id = self._get_device_info()
+            
             io_binding = self.models_processor.models['RetinaFace'].io_binding()
-            io_binding.bind_input(name='input.1', device_type=self.models_processor.device, device_id=0, element_type=np.float32,  shape=aimg.size(), buffer_ptr=aimg.data_ptr())
+            io_binding.bind_input(name='input.1', device_type=device_type, device_id=device_id, element_type=np.float32, shape=aimg.size(), buffer_ptr=aimg.data_ptr())
 
-            io_binding.bind_output('448', self.models_processor.device)
-            io_binding.bind_output('471', self.models_processor.device)
-            io_binding.bind_output('494', self.models_processor.device)
-            io_binding.bind_output('451', self.models_processor.device)
-            io_binding.bind_output('474', self.models_processor.device)
-            io_binding.bind_output('497', self.models_processor.device)
-            io_binding.bind_output('454', self.models_processor.device)
-            io_binding.bind_output('477', self.models_processor.device)
-            io_binding.bind_output('500', self.models_processor.device)
+            io_binding.bind_output('448', device_type, device_id)
+            io_binding.bind_output('471', device_type, device_id)
+            io_binding.bind_output('494', device_type, device_id)
+            io_binding.bind_output('451', device_type, device_id)
+            io_binding.bind_output('474', device_type, device_id)
+            io_binding.bind_output('497', device_type, device_id)
+            io_binding.bind_output('454', device_type, device_id)
+            io_binding.bind_output('477', device_type, device_id)
+            io_binding.bind_output('500', device_type, device_id)
 
             # Sync and run model
-            if self.models_processor.device == "cuda":
-                torch.cuda.synchronize()
-            elif self.models_processor.device != "cpu":
-                self.models_processor.syncvec.cpu()
+            self._sync_device()
             self.models_processor.models['RetinaFace'].run_with_iobinding(io_binding)
 
             net_outs = io_binding.copy_outputs_to_cpu()
@@ -371,17 +394,17 @@ class FaceDetectors:
                 IM = None
                 aimg = torch.unsqueeze(det_img, 0).contiguous()
 
+            # Получаем правильный device_type и device_id для ONNX Runtime
+            device_type, device_id = self._get_device_info()
+            
             io_binding = self.models_processor.models['SCRFD2.5g'].io_binding()
-            io_binding.bind_input(name=input_name, device_type=self.models_processor.device, device_id=0, element_type=np.float32,  shape=aimg.size(), buffer_ptr=aimg.data_ptr())
+            io_binding.bind_input(name=input_name, device_type=device_type, device_id=device_id, element_type=np.float32, shape=aimg.size(), buffer_ptr=aimg.data_ptr())
 
             for i in range(len(output_names)):
-                io_binding.bind_output(output_names[i], self.models_processor.device)
+                io_binding.bind_output(output_names[i], device_type, device_id)
 
             # Sync and run model
-            if self.models_processor.device == "cuda":
-                torch.cuda.synchronize()
-            elif self.models_processor.device != "cpu":
-                self.models_processor.syncvec.cpu()
+            self._sync_device()
             self.models_processor.models['SCRFD2.5g'].run_with_iobinding(io_binding)
 
             net_outs = io_binding.copy_outputs_to_cpu()
@@ -630,15 +653,15 @@ class FaceDetectors:
                 aimg = torch.unsqueeze(aimg, 0).contiguous()
                 IM = None
 
+            # Получаем правильный device_type и device_id для ONNX Runtime
+            device_type, device_id = self._get_device_info()
+            
             io_binding = self.models_processor.models['YoloFace8n'].io_binding()
-            io_binding.bind_input(name='images', device_type=self.models_processor.device, device_id=0, element_type=np.float32,  shape=aimg.size(), buffer_ptr=aimg.data_ptr())
-            io_binding.bind_output('output0', self.models_processor.device)
+            io_binding.bind_input(name='images', device_type=device_type, device_id=device_id, element_type=np.float32, shape=aimg.size(), buffer_ptr=aimg.data_ptr())
+            io_binding.bind_output('output0', device_type, device_id)
 
             # Sync and run model
-            if self.models_processor.device == "cuda":
-                torch.cuda.synchronize()
-            elif self.models_processor.device != "cpu":
-                self.models_processor.syncvec.cpu()
+            self._sync_device()
             self.models_processor.models['YoloFace8n'].run_with_iobinding(io_binding)
 
             net_outs = io_binding.copy_outputs_to_cpu()
@@ -872,17 +895,17 @@ class FaceDetectors:
                 aimg = torch.unsqueeze(det_img, 0).contiguous()
             aimg = aimg.to(dtype=torch.float32)
 
+            # Получаем правильный device_type и device_id для ONNX Runtime
+            device_type, device_id = self._get_device_info()
+            
             io_binding = self.models_processor.models['YunetN'].io_binding()
-            io_binding.bind_input(name=input_name, device_type=self.models_processor.device, device_id=0, element_type=np.float32,  shape=aimg.size(), buffer_ptr=aimg.data_ptr())
+            io_binding.bind_input(name=input_name, device_type=device_type, device_id=device_id, element_type=np.float32, shape=aimg.size(), buffer_ptr=aimg.data_ptr())
 
             for i in range(len(output_names)):
-                io_binding.bind_output(output_names[i], self.models_processor.device)
+                io_binding.bind_output(output_names[i], device_type, device_id)
 
             # Sync and run model
-            if self.models_processor.device == "cuda":
-                torch.cuda.synchronize()
-            elif self.models_processor.device != "cpu":
-                self.models_processor.syncvec.cpu()
+            self._sync_device()
             self.models_processor.models['YunetN'].run_with_iobinding(io_binding)
             net_outs = io_binding.copy_outputs_to_cpu()
 

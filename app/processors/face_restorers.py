@@ -6,12 +6,35 @@ import numpy as np
 from torchvision.transforms import v2
 from skimage import transform as trans
 
+from app.helpers.devices import get_onnx_device_type_and_id
+
 if TYPE_CHECKING:
-    from app.processors.models_processor import ModelsProcessor
+    from app.processors.models_processor_v2 import ModelsProcessorV2
 
 class FaceRestorers:
-    def __init__(self, models_processor: 'ModelsProcessor'):
+    def __init__(self, models_processor: 'ModelsProcessorV2'):
         self.models_processor = models_processor
+        
+    def _get_device_info(self):
+        """
+        Получает информацию об устройстве для ONNX Runtime IO Binding.
+        
+        Returns:
+            tuple: (device_type, device_id)
+        """
+        return get_onnx_device_type_and_id(
+            self.models_processor.torch_device_string, 
+            self.models_processor.cuda_device_id
+        )
+            
+    def _sync_device(self):
+        """
+        Синхронизирует устройство после выполнения операций.
+        """
+        if self.models_processor.device == "cuda" or self.models_processor.device.startswith("cuda:"):
+            torch.cuda.synchronize()
+        elif self.models_processor.device != "cpu":
+            self.models_processor.syncvec.cpu()
 
     def apply_facerestorer(self, swapped_face_upscaled, restorer_det_type, restorer_type, restorer_blend, fidelity_weight, detect_score):
         temp = swapped_face_upscaled
@@ -111,133 +134,133 @@ class FaceRestorers:
         if not self.models_processor.models['GFPGANv1.4']:
             self.models_processor.models['GFPGANv1.4'] = self.models_processor.load_model('GFPGANv1.4')
 
-        io_binding = self.models_processor.models['GFPGANv1.4'].io_binding()
-        io_binding.bind_input(name='input', device_type=self.models_processor.device, device_id=0, element_type=np.float32, shape=(1,3,512,512), buffer_ptr=image.data_ptr())
-        io_binding.bind_output(name='output', device_type=self.models_processor.device, device_id=0, element_type=np.float32, shape=(1,3,512,512), buffer_ptr=output.data_ptr())
+        # Получаем правильный device_type и device_id для ONNX Runtime
+        device_type, device_id = self._get_device_info()
 
-        if self.models_processor.device == "cuda":
-            torch.cuda.synchronize()
-        elif self.models_processor.device != "cpu":
-            self.models_processor.syncvec.cpu()
+        io_binding = self.models_processor.models['GFPGANv1.4'].io_binding()
+        io_binding.bind_input(name='input', device_type=device_type, device_id=device_id, element_type=np.float32, shape=(1,3,512,512), buffer_ptr=image.data_ptr())
+        io_binding.bind_output(name='output', device_type=device_type, device_id=device_id, element_type=np.float32, shape=(1,3,512,512), buffer_ptr=output.data_ptr())
+
+        self._sync_device()
         self.models_processor.models['GFPGANv1.4'].run_with_iobinding(io_binding)
 
     def run_GPEN_256(self, image, output):
         if not self.models_processor.models['GPENBFR256']:
             self.models_processor.models['GPENBFR256'] = self.models_processor.load_model('GPENBFR256')
 
-        io_binding = self.models_processor.models['GPENBFR256'].io_binding()
-        io_binding.bind_input(name='input', device_type=self.models_processor.device, device_id=0, element_type=np.float32, shape=(1,3,256,256), buffer_ptr=image.data_ptr())
-        io_binding.bind_output(name='output', device_type=self.models_processor.device, device_id=0, element_type=np.float32, shape=(1,3,256,256), buffer_ptr=output.data_ptr())
+        # Получаем правильный device_type и device_id для ONNX Runtime
+        device_type, device_id = self._get_device_info()
 
-        if self.models_processor.device == "cuda":
-            torch.cuda.synchronize()
-        elif self.models_processor.device != "cpu":
-            self.models_processor.syncvec.cpu()
+        io_binding = self.models_processor.models['GPENBFR256'].io_binding()
+        io_binding.bind_input(name='input', device_type=device_type, device_id=device_id, element_type=np.float32, shape=(1,3,256,256), buffer_ptr=image.data_ptr())
+        io_binding.bind_output(name='output', device_type=device_type, device_id=device_id, element_type=np.float32, shape=(1,3,256,256), buffer_ptr=output.data_ptr())
+
+        self._sync_device()
         self.models_processor.models['GPENBFR256'].run_with_iobinding(io_binding)
 
     def run_GPEN_512(self, image, output):
         if not self.models_processor.models['GPENBFR512']:
             self.models_processor.models['GPENBFR512'] = self.models_processor.load_model('GPENBFR512')
 
-        io_binding = self.models_processor.models['GPENBFR512'].io_binding()
-        io_binding.bind_input(name='input', device_type=self.models_processor.device, device_id=0, element_type=np.float32, shape=(1,3,512,512), buffer_ptr=image.data_ptr())
-        io_binding.bind_output(name='output', device_type=self.models_processor.device, device_id=0, element_type=np.float32, shape=(1,3,512,512), buffer_ptr=output.data_ptr())
+        # Получаем правильный device_type и device_id для ONNX Runtime
+        device_type, device_id = self._get_device_info()
 
-        if self.models_processor.device == "cuda":
-            torch.cuda.synchronize()
-        elif self.models_processor.device != "cpu":
-            self.models_processor.syncvec.cpu()
+        io_binding = self.models_processor.models['GPENBFR512'].io_binding()
+        io_binding.bind_input(name='input', device_type=device_type, device_id=device_id, element_type=np.float32, shape=(1,3,512,512), buffer_ptr=image.data_ptr())
+        io_binding.bind_output(name='output', device_type=device_type, device_id=device_id, element_type=np.float32, shape=(1,3,512,512), buffer_ptr=output.data_ptr())
+
+        self._sync_device()
         self.models_processor.models['GPENBFR512'].run_with_iobinding(io_binding)
 
     def run_GPEN_1024(self, image, output):
         if not self.models_processor.models['GPENBFR1024']:
             self.models_processor.models['GPENBFR1024'] = self.models_processor.load_model('GPENBFR1024')
 
-        io_binding = self.models_processor.models['GPENBFR1024'].io_binding()
-        io_binding.bind_input(name='input', device_type=self.models_processor.device, device_id=0, element_type=np.float32, shape=(1,3,1024,1024), buffer_ptr=image.data_ptr())
-        io_binding.bind_output(name='output', device_type=self.models_processor.device, device_id=0, element_type=np.float32, shape=(1,3,1024,1024), buffer_ptr=output.data_ptr())
+        # Получаем правильный device_type и device_id для ONNX Runtime
+        device_type, device_id = self._get_device_info()
 
-        if self.models_processor.device == "cuda":
-            torch.cuda.synchronize()
-        elif self.models_processor.device != "cpu":
-            self.models_processor.syncvec.cpu()
+        io_binding = self.models_processor.models['GPENBFR1024'].io_binding()
+        io_binding.bind_input(name='input', device_type=device_type, device_id=device_id, element_type=np.float32, shape=(1,3,1024,1024), buffer_ptr=image.data_ptr())
+        io_binding.bind_output(name='output', device_type=device_type, device_id=device_id, element_type=np.float32, shape=(1,3,1024,1024), buffer_ptr=output.data_ptr())
+
+        self._sync_device()
         self.models_processor.models['GPENBFR1024'].run_with_iobinding(io_binding)
 
     def run_GPEN_2048(self, image, output):
         if not self.models_processor.models['GPENBFR2048']:
             self.models_processor.models['GPENBFR2048'] = self.models_processor.load_model('GPENBFR2048')
 
-        io_binding = self.models_processor.models['GPENBFR2048'].io_binding()
-        io_binding.bind_input(name='input', device_type=self.models_processor.device, device_id=0, element_type=np.float32, shape=(1,3,2048,2048), buffer_ptr=image.data_ptr())
-        io_binding.bind_output(name='output', device_type=self.models_processor.device, device_id=0, element_type=np.float32, shape=(1,3,2048,2048), buffer_ptr=output.data_ptr())
+        # Получаем правильный device_type и device_id для ONNX Runtime
+        device_type, device_id = self._get_device_info()
 
-        if self.models_processor.device == "cuda":
-            torch.cuda.synchronize()
-        elif self.models_processor.device != "cpu":
-            self.models_processor.syncvec.cpu()
+        io_binding = self.models_processor.models['GPENBFR2048'].io_binding()
+        io_binding.bind_input(name='input', device_type=device_type, device_id=device_id, element_type=np.float32, shape=(1,3,2048,2048), buffer_ptr=image.data_ptr())
+        io_binding.bind_output(name='output', device_type=device_type, device_id=device_id, element_type=np.float32, shape=(1,3,2048,2048), buffer_ptr=output.data_ptr())
+
+        self._sync_device()
         self.models_processor.models['GPENBFR2048'].run_with_iobinding(io_binding)
 
     def run_codeformer(self, image, output, fidelity_weight_value=0.9):
         if not self.models_processor.models['CodeFormer']:
             self.models_processor.models['CodeFormer'] = self.models_processor.load_model('CodeFormer')
 
+        # Получаем правильный device_type и device_id для ONNX Runtime
+        device_type, device_id = self._get_device_info()
+
         io_binding = self.models_processor.models['CodeFormer'].io_binding()
-        io_binding.bind_input(name='x', device_type=self.models_processor.device, device_id=0, element_type=np.float32, shape=(1,3,512,512), buffer_ptr=image.data_ptr())
+        io_binding.bind_input(name='x', device_type=device_type, device_id=device_id, element_type=np.float32, shape=(1,3,512,512), buffer_ptr=image.data_ptr())
         w = np.array([fidelity_weight_value], dtype=np.double)
         io_binding.bind_cpu_input('w', w)
-        io_binding.bind_output(name='y', device_type=self.models_processor.device, device_id=0, element_type=np.float32, shape=(1,3,512,512), buffer_ptr=output.data_ptr())
+        io_binding.bind_output(name='y', device_type=device_type, device_id=device_id, element_type=np.float32, shape=(1,3,512,512), buffer_ptr=output.data_ptr())
 
-        if self.models_processor.device == "cuda":
-            torch.cuda.synchronize()
-        elif self.models_processor.device != "cpu":
-            self.models_processor.syncvec.cpu()
+        self._sync_device()
         self.models_processor.models['CodeFormer'].run_with_iobinding(io_binding)
 
     def run_VQFR_v2(self, image, output, fidelity_ratio_value):
         if not self.models_processor.models['VQFRv2']:
             self.models_processor.models['VQFRv2'] = self.models_processor.load_model('VQFRv2')
 
+        # Получаем правильный device_type и device_id для ONNX Runtime
+        device_type, device_id = self._get_device_info()
+
         assert fidelity_ratio_value >= 0.0 and fidelity_ratio_value <= 1.0, 'fidelity_ratio must in range[0,1]'
         fidelity_ratio = torch.tensor(fidelity_ratio_value).to(self.models_processor.device)
 
         io_binding = self.models_processor.models['VQFRv2'].io_binding()
-        io_binding.bind_input(name='x_lq', device_type=self.models_processor.device, device_id=0, element_type=np.float32, shape=image.size(), buffer_ptr=image.data_ptr())
-        io_binding.bind_input(name='fidelity_ratio', device_type=self.models_processor.device, device_id=0, element_type=np.float32, shape=fidelity_ratio.size(), buffer_ptr=fidelity_ratio.data_ptr())
-        io_binding.bind_output('enc_feat', self.models_processor.device)
-        io_binding.bind_output('quant_logit', self.models_processor.device)
-        io_binding.bind_output('texture_dec', self.models_processor.device)
-        io_binding.bind_output(name='main_dec', device_type=self.models_processor.device, device_id=0, element_type=np.float32, shape=(1,3,512,512), buffer_ptr=output.data_ptr())
+        io_binding.bind_input(name='x_lq', device_type=device_type, device_id=device_id, element_type=np.float32, shape=image.size(), buffer_ptr=image.data_ptr())
+        io_binding.bind_input(name='fidelity_ratio', device_type=device_type, device_id=device_id, element_type=np.float32, shape=fidelity_ratio.size(), buffer_ptr=fidelity_ratio.data_ptr())
+        io_binding.bind_output('enc_feat', device_type, device_id)
+        io_binding.bind_output('quant_logit', device_type, device_id)
+        io_binding.bind_output('texture_dec', device_type, device_id)
+        io_binding.bind_output(name='main_dec', device_type=device_type, device_id=device_id, element_type=np.float32, shape=(1,3,512,512), buffer_ptr=output.data_ptr())
 
-        if self.models_processor.device == "cuda":
-            torch.cuda.synchronize()
-        elif self.models_processor.device != "cpu":
-            self.models_processor.syncvec.cpu()
+        self._sync_device()
         self.models_processor.models['VQFRv2'].run_with_iobinding(io_binding)
 
     def run_RestoreFormerPlusPlus(self, image, output):
         if not self.models_processor.models['RestoreFormerPlusPlus']:
             self.models_processor.models['RestoreFormerPlusPlus'] = self.models_processor.load_model('RestoreFormerPlusPlus')
 
-        io_binding = self.models_processor.models['RestoreFormerPlusPlus'].io_binding()
-        io_binding.bind_input(name='input', device_type=self.models_processor.device, device_id=0, element_type=np.float32, shape=image.size(), buffer_ptr=image.data_ptr())
-        io_binding.bind_output(name='2359', device_type=self.models_processor.device, device_id=0, element_type=np.float32, shape=output.size(), buffer_ptr=output.data_ptr())
-        io_binding.bind_output('1228', self.models_processor.device)
-        io_binding.bind_output('1238', self.models_processor.device)
-        io_binding.bind_output('onnx::MatMul_1198', self.models_processor.device)
-        io_binding.bind_output('onnx::Shape_1184', self.models_processor.device)
-        io_binding.bind_output('onnx::ArgMin_1182', self.models_processor.device)
-        io_binding.bind_output('input.1', self.models_processor.device)
-        io_binding.bind_output('x', self.models_processor.device)
-        io_binding.bind_output('x.3', self.models_processor.device)
-        io_binding.bind_output('x.7', self.models_processor.device)
-        io_binding.bind_output('x.11', self.models_processor.device)
-        io_binding.bind_output('x.15', self.models_processor.device)
-        io_binding.bind_output('input.252', self.models_processor.device)
-        io_binding.bind_output('input.280', self.models_processor.device)
-        io_binding.bind_output('input.288', self.models_processor.device)
+        # Получаем правильный device_type и device_id для ONNX Runtime
+        device_type, device_id = self._get_device_info()
 
-        if self.models_processor.device == "cuda":
-            torch.cuda.synchronize()
-        elif self.models_processor.device != "cpu":
-            self.models_processor.syncvec.cpu()
+        io_binding = self.models_processor.models['RestoreFormerPlusPlus'].io_binding()
+        io_binding.bind_input(name='input', device_type=device_type, device_id=device_id, element_type=np.float32, shape=image.size(), buffer_ptr=image.data_ptr())
+        io_binding.bind_output(name='2359', device_type=device_type, device_id=device_id, element_type=np.float32, shape=output.size(), buffer_ptr=output.data_ptr())
+        io_binding.bind_output('1228', device_type, device_id)
+        io_binding.bind_output('1238', device_type, device_id)
+        io_binding.bind_output('onnx::MatMul_1198', device_type, device_id)
+        io_binding.bind_output('onnx::Shape_1184', device_type, device_id)
+        io_binding.bind_output('onnx::ArgMin_1182', device_type, device_id)
+        io_binding.bind_output('input.1', device_type, device_id)
+        io_binding.bind_output('x', device_type, device_id)
+        io_binding.bind_output('x.3', device_type, device_id)
+        io_binding.bind_output('x.7', device_type, device_id)
+        io_binding.bind_output('x.11', device_type, device_id)
+        io_binding.bind_output('x.15', device_type, device_id)
+        io_binding.bind_output('input.252', device_type, device_id)
+        io_binding.bind_output('input.280', device_type, device_id)
+        io_binding.bind_output('input.288', device_type, device_id)
+
+        self._sync_device()
         self.models_processor.models['RestoreFormerPlusPlus'].run_with_iobinding(io_binding)

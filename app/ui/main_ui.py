@@ -17,7 +17,7 @@ from app.ui.widgets.actions import list_view_actions
 from app.ui.widgets.actions import graphics_view_actions
 
 from app.processors.video_processor import VideoProcessor
-from app.processors.models_processor import ModelsProcessor
+from app.processors.models_processor_v2 import ModelsProcessorV2
 from app.ui.widgets import widget_components
 from app.ui.widgets.event_filters import GraphicsViewEventFilter, VideoSeekSliderEventFilter, videoSeekSliderLineEditEventFilter, ListWidgetEventFilter
 from app.ui.widgets import ui_workers
@@ -43,7 +43,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.input_faces_filter_worker = ui_workers.FilterWorker(main_window=self, search_text='', filter_list='input_faces')
         self.merged_embeddings_filter_worker = ui_workers.FilterWorker(main_window=self, search_text='', filter_list='merged_embeddings')
         self.video_processor = VideoProcessor(self)
-        self.models_processor = ModelsProcessor(self)
+        self.models_processor = ModelsProcessorV2(self)
         self.target_videos: Dict[int, widget_components.TargetMediaCardButton] = {} #Contains button objects of target videos (Set as list instead of single video to support batch processing in future)
         self.target_faces: Dict[int, widget_components.TargetFaceCardButton] = {} #Contains button objects of target faces
         self.input_faces: Dict[int, widget_components.InputFaceCardButton] = {} #Contains button objects of source faces (images)

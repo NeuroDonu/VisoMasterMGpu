@@ -1,6 +1,8 @@
 from app.helpers import miscellaneous as misc_helpers
 from app.ui.widgets.actions import layout_actions
 from app.helpers.typing_helper import LayoutDictTypes
+from app.helpers.devices import get_available_devices
+import torch.cuda as cu
 
 # Widgets in Face Swap tab are created from this Layout
 SWAPPER_LAYOUT_DATA: LayoutDictTypes = {
@@ -10,6 +12,13 @@ SWAPPER_LAYOUT_DATA: LayoutDictTypes = {
             'label': 'Swapper Model',
             'options': ['Inswapper128', 'InStyleSwapper256 Version A', 'InStyleSwapper256 Version B', 'InStyleSwapper256 Version C', 'DeepFaceLive (DFM)', 'SimSwap512', 'GhostFace-v1', 'GhostFace-v2', 'GhostFace-v3', 'CSCS'],            'default': 'Inswapper128',
             'help': 'Choose which swapper model to use for face swapping.'
+        },
+        'SwapperDeviceSelection': {
+            'level': 1,
+            'label': 'Device',
+            'options': get_available_devices,
+            'default': 'cuda:0' if cu.is_available() else 'cpu',
+            'help': 'Select the device for face swapping. CUDA is recommended for better performance.'
         },
         'SwapperResSelection': {
             'level': 2,

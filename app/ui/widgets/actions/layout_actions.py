@@ -66,13 +66,32 @@ def add_widgets_to_tab_layout(main_window: 'MainWindow', LAYOUT_DATA: LayoutDict
                 widget.toggled.connect(partial(onchange, widget, widget_name, widget_data))
 
             elif 'Selection' in widget_name:
-                widget = widget_components.SelectionBox(label=widget_data['label'], widget_name=widget_name, group_layout_data=widgets, label_widget=label, main_window=main_window, default_value=widget_data['default'], selection_values=widget_data['options'])
+                # Подготовка значения по умолчанию
+                default_value = widget_data['default']
+                if callable(default_value):
+                    default_value_to_use = default_value()
+                else:
+                    default_value_to_use = default_value
+                
+                # Создание виджета
+                widget = widget_components.SelectionBox(
+                    label=widget_data['label'], 
+                    widget_name=widget_name, 
+                    group_layout_data=widgets, 
+                    label_widget=label, 
+                    main_window=main_window, 
+                    default_value=default_value_to_use,  # Используем вычисленное значение
+                    selection_values=widget_data['options']
+                )
+                
+                # Добавление элементов
                 if callable(widget_data['options']):
                     widget.addItems(widget_data['options']())
-                    widget.setCurrentText(widget_data['default']())
                 else:
                     widget.addItems(widget_data['options'])
-                    widget.setCurrentText(widget_data['default'])
+                
+                # Установка текущего значения
+                widget.setCurrentText(default_value_to_use)
 
                 widget.reset_default_button = widget_components.ParameterResetDefaultButton(related_widget=widget)
 
