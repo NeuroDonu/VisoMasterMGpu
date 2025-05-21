@@ -13,6 +13,19 @@ class DFMModel:
         self._model_path = model_path
         self.providers = providers
         self.device = device
+        
+        # Извлекаем device_id из строки устройства, если она в формате "cuda:X"
+        self.device_id = 0
+        if isinstance(device, str) and ':' in device:
+            parts = device.split(':')
+            if len(parts) > 1 and parts[1].isdigit():
+                self.device_id = int(parts[1])
+                self.device_type = parts[0]
+            else:
+                self.device_type = device
+        else:
+            self.device_type = device
+            
         self.syncvec = torch.empty((1, 1), dtype=torch.float32, device=device)
         
         sess = self._sess = onnxruntime.InferenceSession(str(model_path), providers=self.providers)
@@ -88,12 +101,12 @@ class DFMModel:
         io_binding = self._sess.io_binding()
 
         # Bind input image tensor
-        io_binding.bind_input(name='in_face:0', device_type=self.device, device_id=0, element_type=np.float32, shape=img.shape, buffer_ptr=img.data_ptr())
+        io_binding.bind_input(name='in_face:0', device_type=self.device_type, device_id=self.device_id, element_type=np.float32, shape=img.shape, buffer_ptr=img.data_ptr())
 
         # Bind morph factor if the model supports it
         if self._model_type == 2:
             morph_factor_t = torch.tensor([morph_factor], dtype=torch.float32, device=self.device)
-            io_binding.bind_input(name='morph_value:0', device_type=self.device, device_id=0, element_type=np.float32, shape=morph_factor_t.shape, buffer_ptr=morph_factor_t.data_ptr())
+            io_binding.bind_input(name='morph_value:0', device_type=self.device_type, device_id=self.device_id, element_type=np.float32, shape=morph_factor_t.shape, buffer_ptr=morph_factor_t.data_ptr())
 
         # Prepare output tensors and bind them
         outputs = self._sess.get_outputs()
@@ -113,17 +126,17 @@ class DFMModel:
             # Bind the output using ONNX Runtime's io_binding
             io_binding.bind_output(
                 name=output.name,
-                device_type=self.device,
-                device_id=0,
+                device_type=self.device_type,
+                device_id=self.device_id,
                 element_type=self.onnx_to_numpy_dtype[output.type],  # Use NumPy dtype for element_type
                 shape=shape,
                 buffer_ptr=binding_outputs[idx].data_ptr()
             )
 
         # Run the model
-        if self.device == "cuda":
+        if self.device_type == "cuda":
             torch.cuda.synchronize()
-        elif self.device != "cpu":
+        elif self.device_type != "cpu":
             self.syncvec.cpu()
         self._sess.run_with_iobinding(io_binding)
 
@@ -182,8 +195,12 @@ class DFMModel:
         like_for_stat = self.to_ufloat32(like).permute(0, 3, 1, 2)  # Convert to (N, 3, H, W)
 
         # Convert to LAB color space for each image in the batch
-        img_lab = torch.stack([faceutil.rgb_to_lab(img[i], False) for i in range(N)])  # Convert to LAB in (N, 3, H, W)
-        like_lab = torch.stack([faceutil.rgb_to_lab(like_for_stat[i], False) for i in range(N)])  # Convert to LAB in (N, 3, H, W)
+        img_lab = torch.zeros((N, 3, img.shape[2], img.shape[3]), dtype=torch.float32, device=self.device)
+        like_lab = torch.zeros((N, 3, like_for_stat.shape[2], like_for_stat.shape[3]), dtype=torch.float32, device=self.device)
+        
+        for i in range(N):
+            img_lab[i] = faceutil.rgb_to_lab(img[i], False)  # Convert to LAB in (3, H, W)
+            like_lab[i] = faceutil.rgb_to_lab(like_for_stat[i], False)  # Convert to LAB in (3, H, W)
 
         # Apply like mask
         if like_mask is not None:
@@ -233,11 +250,13 @@ class DFMModel:
             img_out[i] = torch.stack([source_l, source_a, source_b], dim=0)
 
         # Convert back to RGB for each image in the batch
-        img_out = torch.stack([faceutil.lab_to_rgb(img_out[i], False) for i in range(N)])  # Convert from LAB to RGB directly in (N, 3, H, W)
+        rgb_out = torch.zeros((N, 3, img.shape[2], img.shape[3]), dtype=torch.float32, device=self.device)
+        for i in range(N):
+            rgb_out[i] = faceutil.lab_to_rgb(img_out[i], False)  # Convert from LAB to RGB directly in (3, H, W)
 
         # Convert back to the original data type
-        img_out = self.to_dtype(img_out, dtype).permute(0, 2, 3, 1)  # Convert back to (N, H, W, 3)
-        return img_out
+        rgb_out = self.to_dtype(rgb_out, dtype).permute(0, 2, 3, 1)  # Convert back to (N, H, W, 3)
+        return rgb_out
 
     def convert_shape(self, shape):
         # Iterate over each dimension in the shape

@@ -18,6 +18,12 @@ class FaceLandmarkDetectors:
     def __init__(self, models_processor: 'ModelsProcessorV2'):
         self.models_processor = models_processor
         
+    def get_device_type_and_id(self):
+        """Возвращает правильный тип устройства и ID для ONNX Runtime IO Binding"""
+        return get_onnx_device_type_and_id(
+            self.models_processor.torch_device_string, 
+            self.models_processor.cuda_device_id
+        )
     def _get_device_info(self):
         """
         Получает информацию об устройстве для ONNX Runtime IO Binding.
@@ -152,14 +158,17 @@ class FaceLandmarkDetectors:
         conf = torch.empty((1,10752,2), dtype=torch.float32, device=self.models_processor.device).contiguous()
         landmarks = torch.empty((1,10752,10), dtype=torch.float32, device=self.models_processor.device).contiguous()
 
+        # Получаем правильный тип устройства и ID для ONNX Runtime
+        device_type, device_id = self.get_device_type_and_id()
+        
         io_binding = self.models_processor.models['FaceLandmark5'].io_binding()
-        io_binding.bind_input(name='input', device_type=self.models_processor.device, device_id=0, element_type=np.float32, shape=(1,3,512,512), buffer_ptr=image.data_ptr())
-        io_binding.bind_output(name='conf', device_type=self.models_processor.device, device_id=0, element_type=np.float32, shape=(1,10752,2), buffer_ptr=conf.data_ptr())
-        io_binding.bind_output(name='landmarks', device_type=self.models_processor.device, device_id=0, element_type=np.float32, shape=(1,10752,10), buffer_ptr=landmarks.data_ptr())
+        io_binding.bind_input(name='input', device_type=device_type, device_id=device_id, element_type=np.float32, shape=(1,3,512,512), buffer_ptr=image.data_ptr())
+        io_binding.bind_output(name='conf', device_type=device_type, device_id=device_id, element_type=np.float32, shape=(1,10752,2), buffer_ptr=conf.data_ptr())
+        io_binding.bind_output(name='landmarks', device_type=device_type, device_id=device_id, element_type=np.float32, shape=(1,10752,10), buffer_ptr=landmarks.data_ptr())
 
-        if self.models_processor.device == "cuda":
+        if device_type == "cuda":
             torch.cuda.synchronize()
-        elif self.models_processor.device != "cpu":
+        elif device_type != "cpu":
             self.models_processor.syncvec.cpu()
         self.models_processor.models['FaceLandmark5'].run_with_iobinding(io_binding)
 
@@ -210,16 +219,19 @@ class FaceLandmarkDetectors:
         crop_image = torch.div(crop_image, 255.0)
         crop_image = torch.unsqueeze(crop_image, 0).contiguous()
 
+        # Получаем правильный тип устройства и ID для ONNX Runtime
+        device_type, device_id = self.get_device_type_and_id()
+        
         io_binding = self.models_processor.models['FaceLandmark68'].io_binding()
-        io_binding.bind_input(name='input', device_type=self.models_processor.device, device_id=0, element_type=np.float32,  shape=crop_image.size(), buffer_ptr=crop_image.data_ptr())
+        io_binding.bind_input(name='input', device_type=device_type, device_id=device_id, element_type=np.float32, shape=crop_image.size(), buffer_ptr=crop_image.data_ptr())
 
-        io_binding.bind_output('landmarks_xyscore', self.models_processor.device)
-        io_binding.bind_output('heatmaps', self.models_processor.device)
+        io_binding.bind_output('landmarks_xyscore', device_type, device_id)
+        io_binding.bind_output('heatmaps', device_type, device_id)
 
         # Sync and run model
-        if self.models_processor.device == "cuda":
+        if device_type == "cuda":
             torch.cuda.synchronize()
-        elif self.models_processor.device != "cpu":
+        elif device_type != "cpu":
             self.models_processor.syncvec.cpu()
         self.models_processor.models['FaceLandmark68'].run_with_iobinding(io_binding)
         net_outs = io_binding.copy_outputs_to_cpu()
@@ -251,15 +263,18 @@ class FaceLandmarkDetectors:
         aimg = torch.unsqueeze(aimg, 0).contiguous()
         aimg = aimg.to(dtype=torch.float32)
         aimg = self.models_processor.normalize(aimg)
+        # Получаем правильный тип устройства и ID для ONNX Runtime
+        device_type, device_id = self.get_device_type_and_id()
+        
         io_binding = self.models_processor.models['FaceLandmark3d68'].io_binding()
-        io_binding.bind_input(name='data', device_type=self.models_processor.device, device_id=0, element_type=np.float32,  shape=aimg.size(), buffer_ptr=aimg.data_ptr())
+        io_binding.bind_input(name='data', device_type=device_type, device_id=device_id, element_type=np.float32, shape=aimg.size(), buffer_ptr=aimg.data_ptr())
 
-        io_binding.bind_output('fc1', self.models_processor.device)
+        io_binding.bind_output('fc1', device_type, device_id)
 
         # Sync and run model
-        if self.models_processor.device == "cuda":
+        if device_type == "cuda":
             torch.cuda.synchronize()
-        elif self.models_processor.device != "cpu":
+        elif device_type != "cpu":
             self.models_processor.syncvec.cpu()
         self.models_processor.models['FaceLandmark3d68'].run_with_iobinding(io_binding)
         pred = io_binding.copy_outputs_to_cpu()[0][0]
@@ -310,15 +325,18 @@ class FaceLandmarkDetectors:
             crop_image = torch.div(crop_image, 255.0)
             crop_image = torch.unsqueeze(crop_image, 0).contiguous()
 
+            # Получаем правильный тип устройства и ID для ONNX Runtime
+            device_type, device_id = self.get_device_type_and_id()
+            
             io_binding = self.models_processor.models['FaceLandmark98'].io_binding()
-            io_binding.bind_input(name='input', device_type=self.models_processor.device, device_id=0, element_type=np.float32,  shape=crop_image.size(), buffer_ptr=crop_image.data_ptr())
+            io_binding.bind_input(name='input', device_type=device_type, device_id=device_id, element_type=np.float32, shape=crop_image.size(), buffer_ptr=crop_image.data_ptr())
 
-            io_binding.bind_output('landmarks_xyscore', self.models_processor.device)
+            io_binding.bind_output('landmarks_xyscore', device_type, device_id)
 
             # Sync and run model
-            if self.models_processor.device == "cuda":
+            if device_type == "cuda":
                 torch.cuda.synchronize()
-            elif self.models_processor.device != "cpu":
+            elif device_type != "cpu":
                 self.models_processor.syncvec.cpu()
             self.models_processor.models['FaceLandmark98'].run_with_iobinding(io_binding)
             landmarks_xyscore = io_binding.copy_outputs_to_cpu()[0]
@@ -357,15 +375,18 @@ class FaceLandmarkDetectors:
         aimg = torch.unsqueeze(aimg, 0).contiguous()
         aimg = aimg.to(dtype=torch.float32)
         aimg = self.models_processor.normalize(aimg)
+        # Получаем правильный тип устройства и ID для ONNX Runtime
+        device_type, device_id = self.get_device_type_and_id()
+        
         io_binding = self.models_processor.models['FaceLandmark106'].io_binding()
-        io_binding.bind_input(name='data', device_type=self.models_processor.device, device_id=0, element_type=np.float32,  shape=aimg.size(), buffer_ptr=aimg.data_ptr())
+        io_binding.bind_input(name='data', device_type=device_type, device_id=device_id, element_type=np.float32, shape=aimg.size(), buffer_ptr=aimg.data_ptr())
 
-        io_binding.bind_output('fc1', self.models_processor.device)
+        io_binding.bind_output('fc1', device_type, device_id)
 
         # Sync and run model
-        if self.models_processor.device == "cuda":
+        if device_type == "cuda":
             torch.cuda.synchronize()
-        elif self.models_processor.device != "cpu":
+        elif device_type != "cpu":
             self.models_processor.syncvec.cpu()
         self.models_processor.models['FaceLandmark106'].run_with_iobinding(io_binding)
         pred = io_binding.copy_outputs_to_cpu()[0][0]
@@ -413,15 +434,22 @@ class FaceLandmarkDetectors:
         aimg = torch.unsqueeze(aimg, 0).contiguous()
         aimg = aimg.to(dtype=torch.float32)
         aimg = torch.div(aimg, 255.0)
+        # Получаем правильный тип устройства и ID для ONNX Runtime
+        from app.helpers.devices import get_onnx_device_type_and_id
+        device_type, device_id = get_onnx_device_type_and_id(
+            self.models_processor.torch_device_string, 
+            self.models_processor.cuda_device_id
+        )
+        
         io_binding = self.models_processor.models['FaceLandmark203'].io_binding()
-        io_binding.bind_input(name='input', device_type=self.models_processor.device, device_id=0, element_type=np.float32,  shape=aimg.size(), buffer_ptr=aimg.data_ptr())
+        io_binding.bind_input(name='input', device_type=device_type, device_id=device_id, element_type=np.float32, shape=aimg.size(), buffer_ptr=aimg.data_ptr())
 
-        io_binding.bind_output('output', self.models_processor.device)
-        io_binding.bind_output('853', self.models_processor.device)
-        io_binding.bind_output('856', self.models_processor.device)
+        io_binding.bind_output('output', device_type, device_id)
+        io_binding.bind_output('853', device_type, device_id)
+        io_binding.bind_output('856', device_type, device_id)
 
         # Sync and run model
-        if self.models_processor.device == "cuda":
+        if device_type == "cuda":
             torch.cuda.synchronize()
         elif self.models_processor.device != "cpu":
             self.models_processor.syncvec.cpu()
@@ -457,17 +485,20 @@ class FaceLandmarkDetectors:
         aimg = torch.unsqueeze(aimg, 0).contiguous()
         aimg = aimg.to(dtype=torch.float32)
         aimg = torch.div(aimg, 255.0)
+        # Получаем правильный тип устройства и ID для ONNX Runtime
+        device_type, device_id = self.get_device_type_and_id()
+        
         io_binding = self.models_processor.models['FaceLandmark478'].io_binding()
-        io_binding.bind_input(name='input_12', device_type=self.models_processor.device, device_id=0, element_type=np.float32,  shape=aimg.size(), buffer_ptr=aimg.data_ptr())
+        io_binding.bind_input(name='input_12', device_type=device_type, device_id=device_id, element_type=np.float32, shape=aimg.size(), buffer_ptr=aimg.data_ptr())
 
-        io_binding.bind_output('Identity', self.models_processor.device)
-        io_binding.bind_output('Identity_1', self.models_processor.device)
-        io_binding.bind_output('Identity_2', self.models_processor.device)
+        io_binding.bind_output('Identity', device_type, device_id)
+        io_binding.bind_output('Identity_1', device_type, device_id)
+        io_binding.bind_output('Identity_2', device_type, device_id)
 
         # Sync and run model
-        if self.models_processor.device == "cuda":
+        if device_type == "cuda":
             torch.cuda.synchronize()
-        elif self.models_processor.device != "cpu":
+        elif device_type != "cpu":
             self.models_processor.syncvec.cpu()
         self.models_processor.models['FaceLandmark478'].run_with_iobinding(io_binding)
         landmarks, faceflag, blendshapes = io_binding.copy_outputs_to_cpu() # pylint: disable=unused-variable
@@ -497,14 +528,17 @@ class FaceLandmarkDetectors:
                 landmark_for_score = landmark_for_score.astype(np.float32)
                 landmark_for_score = torch.from_numpy(landmark_for_score).to(self.models_processor.device)
 
+                # Получаем правильный тип устройства и ID для ONNX Runtime
+                device_type, device_id = self.get_device_type_and_id()
+                
                 io_binding_bs = self.models_processor.models['FaceBlendShapes'].io_binding()
-                io_binding_bs.bind_input(name='input_points', device_type=self.models_processor.device, device_id=0, element_type=np.float32,  shape=tuple(landmark_for_score.shape), buffer_ptr=landmark_for_score.data_ptr())
-                io_binding_bs.bind_output('output', self.models_processor.device)
+                io_binding_bs.bind_input(name='input_points', device_type=device_type, device_id=device_id, element_type=np.float32, shape=tuple(landmark_for_score.shape), buffer_ptr=landmark_for_score.data_ptr())
+                io_binding_bs.bind_output('output', device_type, device_id)
 
                 # Sync and run model
-                if self.models_processor.device == "cuda":
+                if device_type == "cuda":
                     torch.cuda.synchronize()
-                elif self.models_processor.device != "cpu":
+                elif device_type != "cpu":
                     self.models_processor.syncvec.cpu()
                 self.models_processor.models['FaceBlendShapes'].run_with_iobinding(io_binding_bs)
                 landmark_score = io_binding_bs.copy_outputs_to_cpu()[0] # pylint: disable=unused-variable

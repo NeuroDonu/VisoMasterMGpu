@@ -25,6 +25,14 @@ class FaceEditors:
             self.lp_lip_array = np.array(self.load_lip_array())
         except FileNotFoundError:
             self.lp_lip_array = None
+            
+    def get_device_type_and_id(self):
+        """Возвращает правильный тип устройства и ID для ONNX Runtime IO Binding"""
+        from app.helpers.devices import get_onnx_device_type_and_id
+        return get_onnx_device_type_and_id(
+            self.models_processor.torch_device_string, 
+            self.models_processor.cuda_device_id
+        )
     def load_lip_array(self):
         with open(f'{models_dir}/liveportrait_onnx/lip_array.pkl', 'rb') as f:
             return pickle.load(f)
